@@ -1,81 +1,62 @@
 /*
- *
- * @title: スプレッドシートのキーを返却します。
- *        -- グローバル変数の変わりにメソッドで取得
- * @return:キーを返却します。
- * 
- */
-function getSpreadSheetKey(){
-  
-  return "スプレッドシートのキー";
-}
-
+  need to set properties - file > properties of project > properties of script
+  need to Publish as web application
+*/
+ 
 /*
- *
- * @title: アクセストークンのUrlを返却します。
- * @return: アクセストークンを返却します。
- * 
+ * @title: write expense to sheet and reply line
+ * @param: http request 
  */
-function getAccessToken(){
-
-  return 'LINEボットのアクセストークン';
-}
-
-/*
- *
- * @title: LINEのメッセージ送信をトリガーに処理開始
- * @param: HTTPリクエスト
- * 
- */
-
-//ポストで送られてくるので、送られてきたJSONをパース
 function doPost(e) {
   
-  //LINE Developersで取得したアクセストークンを入れる -- varでdoPostの外で宣言しても動かないのが原因＋Webアプリケーションとして公開しないと更新されない
+  // Insert the access token acquired with LINE Developers
   var CHANNEL_ACCESS_TOKEN = getAccessToken();
       
   var json = JSON.parse(e.postData.contents);
   
-  //返信するためのトークン取得
+  // get replyToken Included in JSON
   var reply_token= json.events[0].replyToken;
   
   if (typeof reply_token === 'undefined') {
     return;
   }
 
-  //送られたメッセージ内容を取得
+  //get message Included in JSON
   var message = json.events[0].message.text;  
   
-  // リンクと送られてきたらシートのリンクを返す
+  // validate message
+  var resultValidate = validateMessage(message);
+  
+  if(!resultValidate){
+    postMessage(CHANNEL_ACCESS_TOKEN,reply_token,'正しい項目名を入力してください。');
+    return;
+  }
+  
+  // Return the link of the sheet as it is sent as a link
   if(message === "リンク"){
   
     postMessage(CHANNEL_ACCESS_TOKEN,reply_token,getSpreadSheetUrl());
     return;
   }
   
-  //送られてきた項目名と金額をGoogleスプレッドシートに記載する
+  // Write the item name and amount sent to Google Spreadsheet
   var outputMessage =  writeSheet(message);
   
-  // メッセージを組み立てる
+  // Assemble the message
   var outputMessage = makeMessage(outputMessage);
   
-  //記載をすべて合算して返却する
+  // Combine all the statements and return them
   postMessage(CHANNEL_ACCESS_TOKEN,reply_token,outputMessage);
-
 
  }
 
 /*
- *
- * @title: 項目をシートに書き込みます
- * @param: 書き込む内容
- * 
+ * @title: write sheet
+ * @param: contents 
  */
 function writeSheet(inputMessage) {
   
-  // spreadsheetのキー
-  var spreadSheetKey = getSpreadSheetKey();
-  
+  // set valuefor building a sheet
   var insideFoodCell = "F1";
   var insideFoodColumn = "自炊費";
   var outsideFoodCell = "F2";
@@ -86,17 +67,14 @@ function writeSheet(inputMessage) {
   var variableColumn = "変動費";
   var sumCell = "F5";
   var sumColumn = "合計";
-  
   var per1ServeCell = "F7";
   var per1ServeColumn = "自炊費／一食";
   var perAll1ServeCell = "F8";
   var perAll1ServeColumn = "全食費／一食";
   var totalFoodCell = "F9";
   var totalFoodColumn = "食費合計";
-  
   var formulaPartsStart = "=SUMIF(B:C,";
   var formulaPartsEnd = ",C:C)";
-
   var sumInsideFoodCell = "G1";
   var sumOutsideFoodCell = "G2";
   var sumFixedCell = "G3";
@@ -109,71 +87,73 @@ function writeSheet(inputMessage) {
   var formulaPerAll1Serve = "=ROUND(G9/((3*(DATEDIF(TEXT(A2, \"yyyy/mm/01\") ,B2,\"D\")+1))*2))";
   var sumTotalFoolCell = "G9";
   var formulaTotalFood = "=SUM(" + sumInsideFoodCell + "," + sumOutsideFoodCell +")";
+
+  // get spreadsheet
+  var targetSpreadSheet = getSpreadSheet();
   
-  // targetのspreadSheetを取得
-  var targetSpreadSheet = SpreadsheetApp.openById(spreadSheetKey);
-  
-  // 新しいシートを作る - シート名称が年月
+  // Sheet name is year / month
   var sheetName = Utilities.formatDate(new Date(),"JST","yyyy/MM");
-  // 過去データ入力のため、一時的にシート名称を変更
+  
+  // to debug
   //var sheetName = "2018/05";
   
-  
   var targetSheet;
+ 
   if(!targetSpreadSheet.getSheetByName(sheetName)){
     
+    // no sheet
     targetSheet = targetSpreadSheet.insertSheet(sheetName);
-    
-    // 初回は式の埋め込みも行う。
-    targetSheet.getRange(insideFoodCell).setValue(insideFoodColumn);
-    targetSheet.getRange(outsideFoodCell).setValue(outsideFoodColumn);
-    targetSheet.getRange(fixedCell).setValue(fixedColumn);
-    targetSheet.getRange(variableCell).setValue(variableColumn);
-    targetSheet.getRange(sumCell).setValue(sumColumn);
-    targetSheet.getRange(per1ServeCell).setValue(per1ServeColumn);
-    targetSheet.getRange(perAll1ServeCell).setValue(perAll1ServeColumn);
-    targetSheet.getRange(totalFoodCell).setValue(totalFoodColumn);
-    
-    targetSheet.getRange(sumInsideFoodCell).setFormula(formulaPartsStart + insideFoodCell + formulaPartsEnd);
-    targetSheet.getRange(sumOutsideFoodCell).setFormula(formulaPartsStart + outsideFoodCell + formulaPartsEnd);
-    targetSheet.getRange(sumFixedCell).setFormula(formulaPartsStart + fixedCell + formulaPartsEnd);
-    targetSheet.getRange(sumVariableCell).setFormula(formulaPartsStart + variableCell + formulaPartsEnd);
-    targetSheet.getRange(sumAllCell).setFormula(sumTarget);
-    targetSheet.getRange(sumPer1ServeCell).setFormula(formulaPer1Serve);
-    targetSheet.getRange(sumAllPer1ServeCell).setFormula(formulaPerAll1Serve);
-    targetSheet.getRange(sumTotalFoolCell).setFormula(formulaTotalFood);
     
   }else{
    
+    // is sheet
     targetSheet = targetSpreadSheet.getSheetByName(sheetName);
-    
-    // 食費計算用日付セット - 入力開始日
-    targetSheet.getRange("A1").setValue("入力開始日");
-    targetSheet.getRange("A2").setValue(Utilities.formatDate( new Date(), 'Asia/Tokyo', 'yyyy/MM/01'));
-    // 食費計算用日付セット - 最新入力日
-    targetSheet.getRange("B1").setValue("最新入力日");
-    targetSheet.getRange("B2").setValue(Utilities.formatDate( new Date(), 'Asia/Tokyo', 'yyyy/MM/dd'));
-    
-    
+
   }  
-    // 最終行を取得
+
+  // build sheet
+  targetSheet.getRange(insideFoodCell).setValue(insideFoodColumn);  
+  targetSheet.getRange(outsideFoodCell).setValue(outsideFoodColumn);
+  targetSheet.getRange(fixedCell).setValue(fixedColumn);
+  targetSheet.getRange(variableCell).setValue(variableColumn);
+  targetSheet.getRange(sumCell).setValue(sumColumn);
+  targetSheet.getRange(per1ServeCell).setValue(per1ServeColumn);
+  targetSheet.getRange(perAll1ServeCell).setValue(perAll1ServeColumn);
+  targetSheet.getRange(totalFoodCell).setValue(totalFoodColumn);
+    
+  targetSheet.getRange(sumInsideFoodCell).setFormula(formulaPartsStart + insideFoodCell + formulaPartsEnd);
+  targetSheet.getRange(sumOutsideFoodCell).setFormula(formulaPartsStart + outsideFoodCell + formulaPartsEnd);
+  targetSheet.getRange(sumFixedCell).setFormula(formulaPartsStart + fixedCell + formulaPartsEnd);
+  targetSheet.getRange(sumVariableCell).setFormula(formulaPartsStart + variableCell + formulaPartsEnd);
+  targetSheet.getRange(sumAllCell).setFormula(sumTarget);
+  targetSheet.getRange(sumPer1ServeCell).setFormula(formulaPer1Serve);
+  targetSheet.getRange(sumAllPer1ServeCell).setFormula(formulaPerAll1Serve);
+  targetSheet.getRange(sumTotalFoolCell).setFormula(formulaTotalFood);
+    
+  // meal cost - start
+  targetSheet.getRange("A1").setValue("入力開始日");
+  targetSheet.getRange("A2").setValue(Utilities.formatDate( new Date(), 'Asia/Tokyo', 'yyyy/MM/01'));
+  // meal cost - end
+  targetSheet.getRange("B1").setValue("最新入力日");
+  targetSheet.getRange("B2").setValue(Utilities.formatDate( new Date(), 'Asia/Tokyo', 'yyyy/MM/dd'));
+    
+  // get last line
   var lastRow = targetSheet.getLastRow() + 1;
   
-  // LINEのメッセージを分割
-  // 全角スペースがあった場合、半角スペースに置き換える
+  // double-byte space　to a space
   inputMessage = inputMessage.replace(/　/g," ")
 
-  // 半角スペース想定
+  // split message
   if(inputMessage.split(" ")){
       
     var items = inputMessage.split(" ");
   }
   
+  // input message
   var item = items[0];
   var price = items[1];
+  // optional
   var detail = "";
-  
-  // 備考がある場合のみ。 - outOfIndexException回避のため。
   if(items.length === 3){
   
     detail = items[2];
@@ -184,46 +164,41 @@ function writeSheet(inputMessage) {
   var inputYM = Utilities.formatDate(new Date(),"JST","yyyy年MM日");
   var inputHM = Utilities.formatDate(new Date(),"JST","HH時mm分");
   
-  // 1列目に日付 -- 仮に何も入力されてなかったら0.0になってしまうので注意
+  // 1st column - date
   targetSheet.getRange(lastRow,1).setValue(inputYMDHM);
   
-  // 2列目に項目
+  // 2nd column - item
   targetSheet.getRange(lastRow,2).setValue(item);
   
-  // 3列目に額
+  // 3rd column - price
   targetSheet.getRange(lastRow,3).setValue(price);
   
-  // 4列目に備考
+  // 4th column - detail
   targetSheet.getRange(lastRow,4).setValue(detail);
   
-  // 合計額を取得する
+  // 5th column - to tally
+  targetSheet.getRange(lastRow,8).setFormula('=SUBSTITUTE(SUBSTITUTE(LEFT(A' + lastRow + ',10),"年","/"),"月","/")');
+  
+  // get total amount
   var sumInsideFood = 0;
   sumInsideFood = targetSheet.getRange(sumInsideFoodCell).getValue();
-  
   var sumOutsideFood = 0;
   sumOutsideFood =   targetSheet.getRange(sumOutsideFoodCell).getValue();
-  
   var sumFixed = 0;
   sumFixed =  targetSheet.getRange(sumFixedCell).getValue();
-  
   var sumVariable = 0;
   sumVariable = targetSheet.getRange(sumVariableCell).getValue();
-   
   var sumAll = 0;
   sumAll = targetSheet.getRange(sumAllCell).getValue();
-  
   var sumPer1Serve = 0;
   sumPer1Serve = targetSheet.getRange(sumPer1ServeCell).getValue();
-  
   var sumAllPer1Serve = 0;
   sumAllPer1Serve = targetSheet.getRange(sumAllPer1ServeCell).getValue();
-  
   var sumTotalFool = 0;
   sumTotalFool = targetSheet.getRange(sumTotalFoolCell).getValue();
   
-  // url取得
+  // get url
   var sheetUrl = targetSpreadSheet.getUrl();
-  
   
   return {"inputYMD":inputYMD
           ,"inputHM":inputHM
@@ -243,36 +218,17 @@ function writeSheet(inputMessage) {
 }
 
 /*
- *
- * @title: スプレッドシートのurlを取得します。
- * @return: スプレッドシートのurl
- */
-function getSpreadSheetUrl(){
-  
-  var spreadSheetKey = getSpreadSheetKey();
-  
-  // targetのspreadSheetを取得
-  var targetSpreadSheet = SpreadsheetApp.openById(spreadSheetKey);
-  
-    // url取得
-  var sheetUrl = targetSpreadSheet.getUrl();
-  
-  return sheetUrl;
-}
-
-/*
- *
- * @title: LINEに個別でメッセージを送る
- * @param: チャンネルアクセストークン（固定）
- * @param: リプライトークン（可変）
- * @param: メッセージの内容（可変）
+ * @title: Send messages individually with LINE
+ * @param: access token
+ * @param: reply token
+ * @param: content
  */
 function postMessage(CHANNEL_ACCESS_TOKEN,reply_token,message){
 
   var line_endpoint = 'https://api.line.me/v2/bot/message/reply';
   
   try{
-       // メッセージを返信    
+       // send message    
        UrlFetchApp.fetch(line_endpoint, {
           'headers': {
               'Content-Type': 'application/json; charset=UTF-8',
@@ -297,20 +253,17 @@ function postMessage(CHANNEL_ACCESS_TOKEN,reply_token,message){
 }
 
 /*
- *
- * @title: LINEで全員にメッセージを送る
- * 
- * @param: チャンネルアクセストークン（固定）
- * @param: リプライトークン（可変）
- * @param: メッセージの内容（可変）
+ * @title: Send a message to everyone on LINE
+ * @param: access token
+ * @param: reply token
+ * @param: content
  */
 function broadCastMessage(CHANNEL_ACCESS_TOKEN,reply_token,message){
 
   var line_endpoint = "https://api.line.me/v2/bot/message/push";
-    
-    
+     
   try{
-       // メッセージを返信    
+       // send message    
        UrlFetchApp.fetch(line_endpoint, {
           'headers': {
               'Content-Type': 'application/json; charset=UTF-8',
@@ -336,8 +289,8 @@ function broadCastMessage(CHANNEL_ACCESS_TOKEN,reply_token,message){
 
 /*
  *
- * @title: LINEにを送るメッセージを組み立てる
- * @param: メッセージに必要な内容（可変）
+ * @title: Assemble message to send to LINE
+ * @param: content
  */
 function makeMessage(outputMessage){  
   
@@ -366,35 +319,114 @@ function makeMessage(outputMessage){
   contents += "以上" + br;
   return contents;
   
-  
 } 
 
 /*
- *
- * @title: 出力メッセージにカンマを入れる
- * @param: 変換前
- * @return: 変換後
+ * @title: Put a comma in the output message
+ * @param: before
+ * @return: after
  */
 function insertComma(num) {
     return String(num).replace(/(\d)(?=(\d\d\d)+(?!\d))/g, '$1,');
 }
 
-function urlShortener(url) {
+/*
+ * Daily expense notification
+ */
+function pushMessage() {
 
-  var API_KEY = 'MessagingApiのキー';
+     var message = getSheetOfSpreadSheet().getRange('C2').getValue();
+  
+       // var line_endpoint = 'https://api.line.me/v2/bot/message/push';
+       var line_endpoint = 'https://api.line.me/v2/bot/message/multicast';
 
-  var apiUrl  = 'https://www.googleapis.com/urlshortener/v1/url?key='+API_KEY;
-  var payload = { longUrl: url };
-  var options = {
-        method: 'POST',
-        contentType: 'application/json',
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true
-      }
-  var response = UrlFetchApp.fetch(apiUrl, options);
-  if (response.getResponseCode() !== 200) {
-    throw new Error('cannot shorten url.');
-  } else {
-    return JSON.parse(response).id;
+       // send message    
+       UrlFetchApp.fetch(line_endpoint, {
+          'headers': {
+              'Content-Type': 'application/json; charset=UTF-8',
+              'Authorization': 'Bearer ' + getAccessToken()
+           },
+         'method': 'post',
+          'payload': JSON.stringify({
+            'to':[getHusbandUserId(),getWifeUserId()],
+            //'to':getWifeUserId(),
+            'messages': [{
+              'type': 'text',
+              'text': '本日の出費 : ' + insertComma(message) + '円',
+           }],
+         }),
+       });   
+}
+
+/*
+ * @title: validate message
+ */
+function validateMessage(target){
+
+  // error flag
+  var validateErrorFlg = true;
+  
+  if(target != "リンク" 
+     && target != "自炊費"
+     && target != "外食費"
+     && target != "固定費"
+     && target != "変動費"){
+    
+    validateErrorFlg = false;
   }
+  
+}
+
+function getSheetOfSpreadSheet(){
+
+ // Sheet name is year / month
+  var sheetName = Utilities.formatDate(new Date(),"JST","yyyy/MM");
+  
+  return getSpreadSheet().getSheetByName(sheetName);
+}
+
+/*
+ * @title: get url of screadSheet
+ */
+function getSpreadSheetUrl(){
+  
+  return SpreadsheetApp.openById(getSpreadSheetKey()).getUrl();
+}
+
+/*
+ * @title: return key of Spreadsheet 
+ */
+function getSpreadSheetKey(){
+  
+  return PropertiesService.getScriptProperties().getProperty('SPREAD_SHEET_KEY'); 
+}
+
+/*
+ * @title:return Spreadsheet 
+ */ 
+function getSpreadSheet(){
+ return SpreadsheetApp.openById(getSpreadSheetKey()); 
+}
+
+/*
+ * @title:return userid of husband 
+ */ 
+function getHusbandUserId(){
+ return PropertiesService.getScriptProperties().getProperty('HUSBAND_USER_ID');  
+} 
+
+/*
+ * @title:return userid of wife 
+ */ 
+function getWifeUserId(){
+ return PropertiesService.getScriptProperties().getProperty('WIFE_USER_ID');  
+}
+
+
+/*
+ * @title: return access token
+ */
+function getAccessToken(){
+
+  return PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');  
 }
