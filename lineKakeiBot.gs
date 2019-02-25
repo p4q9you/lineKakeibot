@@ -27,6 +27,9 @@ function doPost(e) {
   // validate message
   var resultValidate = validateMessage(message);
   
+  console.log(resultValidate);
+  Logger.log(resultValidate);
+  
   if(!resultValidate){
     postMessage(CHANNEL_ACCESS_TOKEN,reply_token,'正しい項目名を入力してください。');
     return;
@@ -335,7 +338,12 @@ function insertComma(num) {
  */
 function pushMessage() {
 
+     getSheetOfSpreadSheet().getRange("B2").setValue(Utilities.formatDate( new Date(), 'Asia/Tokyo', 'yyyy/MM/dd'));
+     
+     var br = "\n\r";
      var message = getSheetOfSpreadSheet().getRange('C2').getValue();
+     var totalVal = getSheetOfSpreadSheet().getRange('G5').getValue();
+     var remainDayCount = getSheetOfSpreadSheet().getRange('D2').getValue();
   
        // var line_endpoint = 'https://api.line.me/v2/bot/message/push';
        var line_endpoint = 'https://api.line.me/v2/bot/message/multicast';
@@ -352,8 +360,10 @@ function pushMessage() {
             //'to':getWifeUserId(),
             'messages': [{
               'type': 'text',
-              'text': '本日の出費 : ' + insertComma(message) + '円',
-           }],
+              'text': '本日の出費 : ' + insertComma(message) + '円' + br 
+                    + '今月の合計出費:' + insertComma(totalVal) + '円' + br
+                    + '今月は残り' + remainDayCount + '日です。',
+            }],
          }),
        });   
 }
@@ -363,17 +373,33 @@ function pushMessage() {
  */
 function validateMessage(target){
 
+  var items;
+  
+  // double-byte space　to a space
+  target = target.replace(/　/g," ")
+
+  // split message
+  if(target.split(" ")){
+      
+    items = target.split(" ");
+  }
+  
+  // input message
+  var item = items[0];
+  
   // error flag
   var validateErrorFlg = true;
   
-  if(target != "リンク" 
-     && target != "自炊費"
-     && target != "外食費"
-     && target != "固定費"
-     && target != "変動費"){
+  if(item != "リンク" 
+     && item != "自炊費"
+     && item != "外食費"
+     && item != "固定費"
+     && item != "変動費"){
     
     validateErrorFlg = false;
   }
+  
+  return validateErrorFlg;
   
 }
 
