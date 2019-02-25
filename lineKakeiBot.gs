@@ -339,8 +339,12 @@ function insertComma(num) {
 function pushMessage() {
 
      getSheetOfSpreadSheet().getRange("B2").setValue(Utilities.formatDate( new Date(), 'Asia/Tokyo', 'yyyy/MM/dd'));
+<<<<<<< HEAD
      
      var br = "\n\r";
+=======
+  
+>>>>>>> daa31e473f81925b49a13372f0ed35d1c80cb416
      var message = getSheetOfSpreadSheet().getRange('C2').getValue();
      var totalVal = getSheetOfSpreadSheet().getRange('G5').getValue();
      var remainDayCount = getSheetOfSpreadSheet().getRange('D2').getValue();
